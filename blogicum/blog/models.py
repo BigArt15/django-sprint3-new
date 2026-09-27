@@ -1,12 +1,20 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.utils import timezone
 
 User = get_user_model()
 
 MAX_LENGTH = 256
 
 
-class BaseModel(models.Model):
+class PublishedQuerySet(models.QuerySet):
+    """Базовый QuerySet для моделей с флагом is_published."""
+
+    def published(self):
+        return self.filter(is_published=True)
+
+
+class PublishedModel(models.Model):
     is_published = models.BooleanField(
         "Опубликовано",
         default=True,
@@ -14,11 +22,13 @@ class BaseModel(models.Model):
     )
     created_at = models.DateTimeField("Добавлено", auto_now_add=True)
 
+    objects = PublishedQuerySet.as_manager()
+
     class Meta:
         abstract = True
 
 
-class Category(BaseModel):
+class Category(PublishedModel):
     title = models.CharField("Заголовок", max_length=MAX_LENGTH)
     description = models.TextField("Описание")
     slug = models.SlugField(
@@ -31,7 +41,7 @@ class Category(BaseModel):
         ),
     )
 
-    class Meta(BaseModel.Meta):
+    class Meta(PublishedModel.Meta):
         verbose_name = "категория"
         verbose_name_plural = "Категории"
 
@@ -39,10 +49,10 @@ class Category(BaseModel):
         return self.title
 
 
-class Location(BaseModel):
+class Location(PublishedModel):
     name = models.CharField("Название места", max_length=MAX_LENGTH)
 
-    class Meta(BaseModel.Meta):
+    class Meta(PublishedModel.Meta):
         verbose_name = "местоположение"
         verbose_name_plural = "Местоположения"
 
@@ -50,7 +60,18 @@ class Location(BaseModel):
         return self.name
 
 
-class Post(BaseModel):
+class PostQuerySet(PublishedQuerySet):
+    """Кастомный QuerySet с бизнес-фильтрами для Post."""
+
+    def published(self):
+        return self.filter(
+            is_published=True,
+            pub_date__lte=timezone.now(),
+            category__is_published=True,
+        )
+
+
+class Post(PublishedModel):
     title = models.CharField("Заголовок", max_length=MAX_LENGTH)
     text = models.TextField("Текст")
     pub_date = models.DateTimeField(
@@ -78,6 +99,9 @@ class Post(BaseModel):
         related_name="posts",
         verbose_name="Местоположение",
     )
+
+    # Это ключевая строка — без неё Post.objects.published() не работает.
+    objects = PostQuerySet.as_manager()
 
     class Meta:
         verbose_name = "публикация"
