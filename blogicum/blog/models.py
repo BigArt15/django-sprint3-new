@@ -1,17 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.db import models
-from django.utils import timezone
+
+from .querysets import PostQuerySet, PublishedQuerySet
 
 User = get_user_model()
 
 MAX_LENGTH = 256
-
-
-class PublishedQuerySet(models.QuerySet):
-    """Базовый QuerySet для моделей с флагом is_published."""
-
-    def published(self):
-        return self.filter(is_published=True)
 
 
 class PublishedModel(models.Model):
@@ -60,17 +54,6 @@ class Location(PublishedModel):
         return self.name
 
 
-class PostQuerySet(PublishedQuerySet):
-    """Кастомный QuerySet с бизнес-фильтрами для Post."""
-
-    def published(self):
-        return self.filter(
-            is_published=True,
-            pub_date__lte=timezone.now(),
-            category__is_published=True,
-        )
-
-
 class Post(PublishedModel):
     title = models.CharField("Заголовок", max_length=MAX_LENGTH)
     text = models.TextField("Текст")
@@ -100,7 +83,6 @@ class Post(PublishedModel):
         verbose_name="Местоположение",
     )
 
-    # Это ключевая строка — без неё Post.objects.published() не работает.
     objects = PostQuerySet.as_manager()
 
     class Meta:
